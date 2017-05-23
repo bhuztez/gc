@@ -7,32 +7,33 @@
 #include <utility>
 
 namespace gc {
+  using ::std::size_t;
 
-  template<typename, int>
+  template<typename, size_t>
   struct Counter{
     friend constexpr auto state(Counter);
   };
 
-  template<typename T, int N, typename V>
+  template<typename T, size_t N, typename V>
   struct Set {
     friend constexpr auto state(Counter<T, N>) {
       return V {};
     }
   };
 
-  template<typename T, int N=0>
+  template<typename T, size_t N=0>
   constexpr
-  int
+  size_t
   next(float, Counter<T,N> = {}) {
     return N;
   }
 
-  template<typename T, int N=0,
+  template<typename T, size_t N=0,
            typename = decltype(state(Counter<T,N>{}))
            >
   constexpr
-  int
-  next(int, Counter<T,N> = {}, int value = next(0, Counter<T,N+1>{})) {
+  size_t
+  next(int, Counter<T,N> = {}, size_t value = next(0, Counter<T,N+1>{})) {
     return value;
   }
 
@@ -53,13 +54,13 @@ namespace gc {
   };
 
   struct MemberMetadata {
-    ::std::size_t offset;
-    ::std::size_t n;
+    size_t offset;
+    size_t n;
   };
 
   struct TypeMetadata {
     void (*destroy)(char *);
-    ::std::size_t n;
+    size_t n;
     MemberMetadata members[];
   };
 
@@ -91,9 +92,8 @@ namespace gc {
   }
 
   template<typename T,
-           int N = next<T>(0),
-           typename = typename ::std::enable_if<(N == 0)>::type,
-          ::std::size_t = sizeof(Set<T, N, bool>)>
+           size_t N = next<T>(0),
+           typename = ::std::enable_if_t<(N == 0)>>
   constexpr
   TypeMetadata
   make_metadata() {
@@ -101,11 +101,9 @@ namespace gc {
   }
 
   template<typename T,
-           int N = next<T>(0),
-           typename = typename ::std::enable_if<(N > 0)>::type,
-           typename State = decltype(state(Counter<T,N-1>{})),
-           ::std::size_t = sizeof(Set<T, N, bool>)
-           >
+           size_t N = next<T>(0),
+           typename = ::std::enable_if_t<(N > 0)>,
+           typename State = decltype(state(Counter<T,N-1>{}))>
   constexpr
   TypeMetadata
   make_metadata() {
@@ -121,13 +119,6 @@ namespace gc {
   const
   TypeMetadata
   Metadata<T>::metadata = make_metadata<T>();
-
-  template<typename T>
-  struct Object {
-    using __CLASS__ = T;
-    static_assert(sizeof(Metadata<T>));
-    static_assert(sizeof(Set<T, 0, LIST<>>));
-  };
 
   struct Header {
     Header *prev, *next;
@@ -154,7 +145,7 @@ namespace gc {
   struct Value {
     Header header;
     const TypeMetadata *meta;
-    ::std::size_t ref_count;
+    size_t ref_count;
     char data[];
   };
 
@@ -253,17 +244,32 @@ namespace gc {
     using type = V;
   };
 
-  template<typename T, typename V, ::std::size_t N>
+  template<typename T, typename V, size_t N>
   struct element<T, V (T::*)[N]> {
     using type = typename element<T, V T::*>::type;
   };
 
+  template<typename T, size_t = sizeof(T)>
+  constexpr
+  bool
+  defined(int) {
+    return true;
+  }
+
+  template<typename T>
+  constexpr
+  bool
+  defined(...) {
+    return false;
+  }
+
   template<typename T, typename V, V M,
-           typename = typename ::std::enable_if<is_ptr<typename element<T, V>::type>>::type,
-           int N = next<T>(0),
-           typename = typename ::std::enable_if<(N > 0)>::type,
+           typename = ::std::enable_if_t<not defined<T>(0)>,
+           typename = typename ::std::enable_if_t<is_ptr<typename element<T, V>::type>>,
+           size_t N = next<T>(0),
+           typename = typename ::std::enable_if_t<(N > 0)>,
            typename State = decltype(state(Counter<T,N-1>{})),
-           ::std::size_t = sizeof(Set<T, N, typename APPEND<State, MEMBER<V,M>>::TYPE>)
+           size_t = sizeof(Set<T, N, typename APPEND<State, MEMBER<V,M>>::TYPE>)
            >
   constexpr
   bool
@@ -295,9 +301,9 @@ namespace gc {
       for (Header *p=&header; p->next != &header; p = p->next) {
         Value *value = (Value *)(p->next);
 
-        for(::std::size_t i=0; i< value->meta->n; i++) {
+        for(size_t i=0; i< value->meta->n; i++) {
           Value **base = (Value **)((value->data) + value->meta->members[i].offset);
-          for(::std::size_t j=0; j< value->meta->members[i].n; j++) {
+          for(size_t j=0; j< value->meta->members[i].n; j++) {
             base[j]->ref_count --;
           }
         }
@@ -314,9 +320,9 @@ namespace gc {
       for(Header *p=header.next; p != &header; p = p->next) {
         Value *value = (Value *)p;
 
-        for(::std::size_t i=0; i< value->meta->n; i++) {
+        for(size_t i=0; i< value->meta->n; i++) {
           Value **base = (Value **)((value->data) + value->meta->members[i].offset);
-          for(::std::size_t j=0; j< value->meta->members[i].n; j++) {
+          for(size_t j=0; j< value->meta->members[i].n; j++) {
             if(base[j]->ref_count == 0) {
               remove(base[j]->header);
               insert_before(base[j]->header, header);
@@ -358,6 +364,10 @@ namespace gc {
   }
 }
 
+#define GC_OBJECT(T)                                    \
+  using __CLASS__ = T;                                  \
+  static_assert(sizeof(::gc::Metadata<T>));             \
+  static_assert(sizeof(::gc::Set<T, 0, ::gc::LIST<>>)); \
 
 #define _GC_MEMBER_1(name, shape) name shape
 #define _GC_MEMBER_0(name) name

@@ -1,7 +1,7 @@
-#include <cstdio>
 #include <cassert>
 #include <algorithm>
 #include "gc.hpp"
+
 
 struct Counter {
   static ::std::size_t count;
@@ -30,7 +30,9 @@ struct Counter {
 
 ::std::size_t Counter::count = 0;
 
-struct Cycle : public ::gc::Object<Cycle> {
+
+struct Cycle {
+  GC_OBJECT(Cycle);
   Counter c;
   ::gc::Ptr<Cycle> GC_MEMBER(peer);
 };

@@ -2,6 +2,9 @@
 gc
 ==
 
+.. image:: https://travis-ci.org/bhuztez/gc.svg?branch=master
+    :target: https://travis-ci.org/bhuztez/gc
+
 precise garbage collection for C++
 
 To deal with circular references, a garbage collector has to keep track of all

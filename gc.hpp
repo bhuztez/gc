@@ -86,6 +86,7 @@ namespace gc {
   }
 
   template<typename T, typename... M>
+  constexpr
   TypeMetadata
   make_type_metadata(LIST<M...>) {
     return {&destroy<T>, sizeof...(M), {make_member_metadata(M{})...}};
